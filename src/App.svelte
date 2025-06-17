@@ -1,7 +1,6 @@
 <script>
   import { onMount } from 'svelte';
   import * as api from './api.js';
-  // import './types.js';  // for JSDoc type definitions
 
   // Component imports
   import NoteCard from './components/NoteCard.svelte';
@@ -71,25 +70,34 @@
 
   async function handleConfirmDelete() {
     if(!currentNote) return;
-    isConfirmModalOpen = false;
+   
     const noteIdToDelete = currentNote.id;
-
-    // Remove note immediately from UI
-    promise = Promise.resolve(
-      (async () => {
-        const notes = await promise;
-        return notes.filter((note) => note.id !== noteIdToDelete);
-      })()
-    );
+    isConfirmModalOpen = false;
 
     try {
       await api.deleteNote(noteIdToDelete);
+
+      // Reload notes to reflect deletion
+      loadNotes();
+
     } catch (error) {
       console.error('Failed to delete note:', error);
       alert('Could not delete note. Please try again.');
       loadNotes(); // Reload notes to restore deleted note
     } finally {
       currentNote = null; // Reset current note
+    }
+  }
+
+  function goToNextPage() {
+    currentPage++;
+    loadNotes(); // Fetch notes for the next page
+  }
+
+  function goToPreviousPage() {
+    if(currentPage > 1) {
+      currentPage--;
+      loadNotes(); // Fetch notes for the previous page
     }
   }
 
@@ -120,7 +128,7 @@
       <div class="flex h-16 items-center justify-between">
         <h1 class="text-2xl font-bold">Notes App</h1>
         <div class="flex items-center gap-4">
-          <button on:click={() => (isDarkMode = !isDarkMode)} title="Toggle theme" class="rounded-full p-2 text-xl hover:bg-zinc-100 dark:hover:bg-zinc-800">
+          <button on:click={() => (isDarkMode = !isDarkMode)} title="Toggle theme" class="rounded-full p-2 text-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 cursor-pointer">
             {#if isDarkMode} 🌞 {:else} 🌙 {/if}
           </button>
           <button on:click={handleOpenNewNoteModal} class="hidden rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 sm:block">
@@ -166,17 +174,17 @@
         <!-- Pagination controls -->
         <div class="mt-8 flex justify-center gap-4">
           <button
-            on:click={() => currentPage--}
+            on:click={goToPreviousPage}
             disabled={currentPage === 1}
-            class="rounded-md bg-zinc-200 px-4 py-2 font-semibold text-zinc-800 hover:bg-zinc-300 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-600"
+            class="rounded-md bg-zinc-200 px-4 py-2 font-semibold text-zinc-800 hover:bg-zinc-300 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-600 cursor-pointer"
           >
             Previous
           </button>
           <span class="flex items-center font-medium">Page {currentPage}</span>
           <button
-            on:click={() => currentPage++}
+            on:click={goToNextPage}
             disabled={notes.length < limit}
-            class="rounded-md bg-zinc-200 px-4 py-2 font-semibold text-zinc-800 hover:bg-zinc-300 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-600"
+            class="rounded-md bg-zinc-200 px-4 py-2 font-semibold text-zinc-800 hover:bg-zinc-300 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-600 cursor-pointer"
           >
             Next
           </button>
@@ -201,7 +209,7 @@
     <NoteModal 
       bind:isOpen={isNoteModalOpen} 
       {isSaving} 
-      {currentNote} 
+      note={currentNote} 
       on:save={handleSaveNote}
       on:close={() => isNoteModalOpen = false}
     />

@@ -16,10 +16,10 @@
             { new Date(note.createdAt).toLocaleDateString() }
         </span>
         <div class="flex gap-4">
-            <button on:click={() => dispatch('edit', note)} class="font-medium text-blue-600 hover:text-blue-500 dark:text-blue-500 dark:hover:text-blue-400">
+            <button on:click={() => dispatch('edit', note)} class="font-medium text-blue-600 hover:text-blue-500 dark:text-blue-500 dark:hover:text-blue-400 cursor-pointer">
                 Edit
             </button>
-            <button on:click={() => dispatch('delete', note)} class="font-medium text-red-600 hover:text-red-500 dark:text-red-500 dark:hover:text-red-400">
+            <button on:click={() => dispatch('delete', note)} class="font-medium text-red-600 hover:text-red-500 dark:text-red-500 dark:hover:text-red-400 cursor-pointer">
                 Delete
             </button>
         </div>
