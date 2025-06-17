@@ -9,7 +9,12 @@
   import ConfirmModal from './components/ConfirmModal.svelte';
 
   // State management
-  let promise; // to use with Svelte's await block for loading/error states
+  let allNotes = []; // Holds the complete list of notes from the API
+  let paginatedNotes = []; // The 20 notes currently visible on the page
+  let filteredNoteCount = 0; // Total notes after searching, for pagination logic
+
+  let isLoading = true;
+  let error = null;
 
   // Modal states
   let isNoteModalOpen = false;
@@ -23,17 +28,96 @@
   const limit = 20; // items per page
 
   // Data fetching
-  function loadNotes() {
-    promise = api.getNotes({ page: currentPage, limit, search: searchTerm });
+  async function fetchAllNotes() {
+    isLoading = true;
+    error = null;
+    try {
+      // modify getNotes to fetch all notes
+      allNotes = await api.getNotes({ search: searchTerm });
+    } catch (err) {
+      error = err;
+    } finally {
+      isLoading = false;
+    }
   }
 
-  // Reactive statement - changes when searchTerm or currentPage changes
+  // Initial data load
+  onMount(() => {
+    fetchAllNotes();
+  })
+
+  // Reactive statement - 
   $: {
-    if(searchTerm) currentPage = 1; // Reset to first page when searching
-    loadNotes();
+    // full list of notes
+    let notesToProcess = allNotes;
+
+    // Filter based on the search Term
+    if(searchTerm) {
+      notesToProcess = allNotes.filter(note => note.title.toLowerCase().includes(searchTerm.toLowerCase()));
+    }
+
+    // Sort the filtered list by most recently updated
+    notesToProcess.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+
+    // Store the count for the pagination Next button logic
+    filteredNoteCount = notesToProcess.length;
+
+    // Slice the sorted array to get current page notes
+    const startIndex = (currentPage - 1) * limit;
+    const endIndex = startIndex + limit;
+    paginatedNotes = notesToProcess.slice(startIndex, endIndex);
+  }
+
+  // Reactive statement to reset page when search term changes
+  $: if(searchTerm) {
+    currentPage = 1;
   }
 
   // Event handlers
+  async function handleSaveNote(event) {
+    isSaving = true;
+    const noteToSave = event.detail;
+    try {
+      const now = new Date().toISOString(); // Get current timestamp
+      if (noteToSave.id) {
+        await api.updateNote(noteToSave.id, { ...noteToSave, updatedAt: now });
+      } else {
+        await api.createNote({ ...noteToSave, createdAt: now, updatedAt: now });
+      }
+
+      isNoteModalOpen = false; // Close modal after saving
+      currentPage = 1; // Reset to first page
+      await fetchAllNotes();
+    } catch (err) {
+      error = err;
+			alert('Could not save note. Please try again.');
+    } finally {
+      isSaving = false; // Reset saving state
+    }
+  }
+
+  async function handleConfirmDelete() {
+    if(!currentNote) return;
+
+    try {
+      await api.deleteNote(currentNote.id);
+
+      // fetch all notes again after deleting
+      const maxPage = Math.ceil((filteredNoteCount - 1) / limit) || 1;
+      if(currentPage > maxPage) {
+        currentPage = maxPage;
+      }
+      await fetchAllNotes();
+    } catch (err) {
+      error = err;
+      alert('Could not delete note. Please try again.');
+    } finally {
+      isConfirmModalOpen = false;
+      currentNote = null;
+    }
+  }
+  
+  // Other handlers
   function handleOpenNewNoteModal() {
     currentNote = null; // Reset current note for new note creation
     isNoteModalOpen = true;
@@ -44,60 +128,20 @@
     isNoteModalOpen = true;
   }
 
-  async function handleSaveNote(event) {
-    isSaving = true;
-    const noteToSave = event.detail;
-    try {
-      if(noteToSave.id) {
-        await api.updateNote(noteToSave.id, noteToSave);
-      } else {
-        await api.createNote(noteToSave);
-      }
-      isNoteModalOpen = false; // Close modal after saving
-      loadNotes(); // Reload notes to reflect changes
-    } catch (error) {
-      console.error('Failed to save note:', error);
-			alert('Could not save note. Please try again.');
-    } finally {
-      isSaving = false; // Reset saving state
-    }
-  }
-
   function handleDeleteRequest(event) {
     currentNote = event.detail;
     isConfirmModalOpen = true;
   }
 
-  async function handleConfirmDelete() {
-    if(!currentNote) return;
-   
-    const noteIdToDelete = currentNote.id;
-    isConfirmModalOpen = false;
-
-    try {
-      await api.deleteNote(noteIdToDelete);
-
-      // Reload notes to reflect deletion
-      loadNotes();
-
-    } catch (error) {
-      console.error('Failed to delete note:', error);
-      alert('Could not delete note. Please try again.');
-      loadNotes(); // Reload notes to restore deleted note
-    } finally {
-      currentNote = null; // Reset current note
-    }
-  }
-
   function goToNextPage() {
     currentPage++;
-    loadNotes(); // Fetch notes for the next page
+    // Fetch notes for the next page
   }
 
   function goToPreviousPage() {
     if(currentPage > 1) {
       currentPage--;
-      loadNotes(); // Fetch notes for the previous page
+      // Fetch notes for the previous page
     }
   }
 
@@ -126,13 +170,13 @@
   <header class="sticky top-0 z-10 border-b border-zinc-200 bg-white/70 backdrop-blur-lg dark:border-zinc-700 dark:bg-zinc-900/70">
     <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
       <div class="flex h-16 items-center justify-between">
-        <h1 class="text-2xl font-bold">Notes App</h1>
+        <h1 class="text-2xl font-bold bg-gradient-to-b from-indigo-500 via-indigo-700 to-cyan-400 bg-clip-text text-transparent">NoteItDown</h1>
         <div class="flex items-center gap-4">
           <button on:click={() => (isDarkMode = !isDarkMode)} title="Toggle theme" class="rounded-full p-2 text-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 cursor-pointer">
             {#if isDarkMode} 🌞 {:else} 🌙 {/if}
           </button>
-          <button on:click={handleOpenNewNoteModal} class="hidden rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 sm:block">
-            + New Note
+          <button on:click={handleOpenNewNoteModal} class="hidden rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 sm:block cursor-pointer">
+            New Note
           </button>
         </div>
       </div>
@@ -150,59 +194,57 @@
       >
     </div>
 
-    <!-- Svelte's await block to elegantly handle three states of a promise -->
-    {#await promise}
-      <!-- (pending state) While the promise is loading, show a centered spinner -->
+    
+    {#if isLoading}
+      <!-- Show a centered spinner -->
 			<div class="flex h-64 items-center justify-center">
 				<Spinner />
 			</div>
-    {:then notes}
-      <!-- (resolved state) When the promise succeeds, `notes` contains the result -->
-      {#if notes.length === 0}
-      	<div class="text-center text-zinc-500 dark:text-zinc-400">
-					<p>{searchTerm ? `No notes found for "${searchTerm}".` : 'No notes yet. Create one!'}</p>
-				</div>
-      {:else}
-        <!-- A responsive grid for the note cards -->
-        <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          <!-- Keyed each block for efficient DOM updates -->
-          {#each notes as note (note.id)}
-            <NoteCard {note} on:edit={handleEditRequest} on:delete={handleDeleteRequest} />
-          {/each}
-        </div>
-
-        <!-- Pagination controls -->
-        <div class="mt-8 flex justify-center gap-4">
-          <button
-            on:click={goToPreviousPage}
-            disabled={currentPage === 1}
-            class="rounded-md bg-zinc-200 px-4 py-2 font-semibold text-zinc-800 hover:bg-zinc-300 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-600 cursor-pointer"
-          >
-            Previous
-          </button>
-          <span class="flex items-center font-medium">Page {currentPage}</span>
-          <button
-            on:click={goToNextPage}
-            disabled={notes.length < limit}
-            class="rounded-md bg-zinc-200 px-4 py-2 font-semibold text-zinc-800 hover:bg-zinc-300 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-600 cursor-pointer"
-          >
-            Next
-          </button>
-        </div>
-      {/if}
-    {:catch error}
-      <!-- (rejected state) If the promise fails, show an error message -->
+    {:else if error}
+      <!-- show error message -->
 			<div class="rounded-md border border-red-300 bg-red-50 p-4 text-red-700 dark:border-red-700 dark:bg-red-900/20 dark:text-red-300">
 				<h3 class="font-bold">Oops! Something went wrong.</h3>
 				<p>{error.message}</p>
 			</div>
-    {/await}
+
+    {:else if paginatedNotes.length === 0}
+      <div class="text-center text-zinc-500 dark:text-zinc-400">
+        <p>{searchTerm ? `No notes found for "${searchTerm}".` : 'No notes yet. Create one!'}</p>
+      </div>
+    {:else}
+      <!-- A responsive grid for the note cards -->
+      <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+        <!-- Keyed each block for efficient DOM updates -->
+        {#each paginatedNotes as note (note.id)}
+          <NoteCard {note} on:edit={handleEditRequest} on:delete={handleDeleteRequest} />
+        {/each}
+      </div>
+
+      <!-- Pagination controls -->
+      <div class="mt-8 flex justify-center gap-4">
+        <button
+          on:click={goToPreviousPage}
+          disabled={currentPage === 1}
+          class="rounded-md bg-zinc-200 px-4 py-2 font-semibold text-zinc-800 hover:bg-zinc-300 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-600 cursor-pointer"
+        >
+          Previous
+        </button>
+        <span class="flex items-center font-medium">Page {currentPage}</span>
+        <button
+          on:click={goToNextPage}
+          disabled={currentPage * limit >= filteredNoteCount}
+          class="rounded-md bg-zinc-200 px-4 py-2 font-semibold text-zinc-800 hover:bg-zinc-300 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-600 cursor-pointer"
+        >
+          Next
+        </button>
+      </div>
+    {/if}
   </main>
 
 	<!-- Floating Action Button for mobile -->
 	<button on:click={handleOpenNewNoteModal} class="fixed bottom-6 right-6 flex size-14 items-center justify-center rounded-full bg-blue-600 text-white shadow-lg hover:bg-blue-700 sm:hidden"
   >
-		<span class="text-3xl">+</span>
+		<span class="text-4xl font-bold mb-2">+</span>
 	</button>
 
   <!-- Modals are placed here at the end. They are only visible when their `isOpen` prop is true. -->

@@ -13,7 +13,7 @@
     </div>
     <div class="mt-auto flex items-center justify-between pt-4 text-sm text-zinc-500 dark:text-zinc-400">
         <span>
-            { new Date(note.createdAt).toLocaleDateString() }
+            { new Date(note.updatedAt).toLocaleDateString() }
         </span>
         <div class="flex gap-4">
             <button on:click={() => dispatch('edit', note)} class="font-medium text-blue-600 hover:text-blue-500 dark:text-blue-500 dark:hover:text-blue-400 cursor-pointer">

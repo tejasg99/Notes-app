@@ -21,11 +21,11 @@ async function send({ method, path, data }) {
 }
 
 // CRUD operations for notes
-export function getNotes({ page = 1, limit = 20, search = ''}) {
-    // filtering, sorting and pagination using query parameters
-    let path = `notes?page=${page}&limit=${limit}&sortBy=createdAt&order=desc`;
+export function getNotes({ search = ''}) {
+    // path no longer includes page or limit, rather refetches everything
+    let path = `notes`;
     if(search) {
-        path += `&title=${encodeURIComponent(search)}`; // search by title
+        path += `?title=${encodeURIComponent(search)}`; // search by title
     }
     return send({ method: 'GET', path });
 }
